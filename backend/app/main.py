@@ -1,9 +1,18 @@
 from fastapi import FastAPI
 
+from app.api.v1.search import router as search_router
+
+
 app = FastAPI(
     title="MovieMatch API",
     description="Backend API for the MovieMatch application",
     version="0.1.0",
+)
+
+
+app.include_router(
+    search_router,
+    prefix="/api/v1",
 )
 
 
