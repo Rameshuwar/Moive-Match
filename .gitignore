@@ -1,0 +1,12 @@
+# Environment
+backend/.env
+
+# Python virtual environment
+backend/.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# MovieMatch runtime files
+backend/.moviematch-server.pid
