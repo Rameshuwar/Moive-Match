@@ -1,54 +1,56 @@
-from datetime import time
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
+from app.models.movie import Movie
+from app.models.screen import Screen
+from app.models.show import Show
+from app.models.show_price import ShowPrice
+from app.models.theatre import Theatre
 from app.schemas.search import SearchRequest, SearchResponse, ShowResult
 
 
-def search_shows(request: SearchRequest) -> SearchResponse:
+def search_shows(
+    request: SearchRequest,
+    db: Session,
+) -> SearchResponse:
 
-    mock_shows = [
+    statement = (
+        select(
+            Movie.title,
+            Theatre.name,
+            Show.show_time,
+            ShowPrice.ticket_price,
+            ShowPrice.available_seats,
+        )
+        .join(Show, Show.movie_id == Movie.id)
+        .join(Screen, Show.screen_id == Screen.id)
+        .join(Theatre, Screen.theatre_id == Theatre.id)
+        .join(ShowPrice, ShowPrice.show_id == Show.id)
+        .where(
+            Theatre.district.ilike(request.location),
+            Show.show_date == request.date,
+            Show.show_time >= request.start_time,
+            Show.show_time <= request.end_time,
+            ShowPrice.ticket_price <= request.max_price,
+            ShowPrice.available_seats >= request.ticket_count,
+        )
+        .order_by(Show.show_time)
+    )
+
+    rows = db.execute(statement).all()
+
+    results = [
         ShowResult(
-            movie="Example Movie",
-            theatre="Example Theatre",
-            show_time=time(14, 30),
-            ticket_price=100,
-            available_seats=18,
-        ),
-        ShowResult(
-            movie="Another Movie",
-            theatre="Salem Cinema",
-            show_time=time(15, 0),
-            ticket_price=90,
-            available_seats=32,
-        ),
-        ShowResult(
-            movie="Evening Movie",
-            theatre="City Theatre",
-            show_time=time(18, 30),
-            ticket_price=100,
-            available_seats=20,
-        ),
+            movie=row.title,
+            theatre=row.name,
+            show_time=row.show_time,
+            ticket_price=row.ticket_price,
+            available_seats=row.available_seats,
+        )
+        for row in rows
     ]
 
-    matching_shows = []
-
-    for show in mock_shows:
-
-        if show.ticket_price > request.max_price:
-            continue
-
-        if show.available_seats < request.ticket_count:
-            continue
-
-        if not (
-            request.start_time
-            <= show.show_time
-            <= request.end_time
-        ):
-            continue
-
-        matching_shows.append(show)
-
     return SearchResponse(
-        total_results=len(matching_shows),
-        results=matching_shows,
+        total_results=len(results),
+        results=results,
     )
