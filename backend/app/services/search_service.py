@@ -28,7 +28,17 @@ def search_shows(
         for row in rows
     ]
 
+    total_results = len(results)
+
+    if total_results == 0:
+        message = "No movies found"
+    elif total_results == 1:
+        message = "1 movie found"
+    else:
+        message = f"{total_results} movies found"
+
     return SearchResponse(
-        total_results=len(results),
+        message=message,
+        total_results=total_results,
         results=results,
     )

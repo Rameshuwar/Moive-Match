@@ -47,6 +47,10 @@ class ShowResult(BaseModel):
 
 
 class SearchResponse(BaseModel):
+    message: str = Field(
+        description="Human-readable search result summary",
+        examples=["2 movies found"],
+    )
     total_results: int
     results: list[ShowResult]
 

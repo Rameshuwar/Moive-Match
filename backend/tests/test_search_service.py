@@ -13,6 +13,7 @@ def test_search_returns_matching_show(db):
 
     response = search_shows(request, db)
 
+    assert response.message == "1 movie found"
     assert response.total_results == 1
     assert len(response.results) == 1
 
