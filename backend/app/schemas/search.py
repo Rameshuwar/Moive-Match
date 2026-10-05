@@ -1,7 +1,7 @@
 from datetime import date as DateType
 from datetime import time as TimeType
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class SearchRequest(BaseModel):
@@ -31,6 +31,11 @@ class SearchRequest(BaseModel):
         description="Maximum ticket price in INR",
         examples=[100],
     )
+    @model_validator(mode="after")
+    def validate_time_range(self):
+        if self.start_time >= self.end_time:
+            raise ValueError("start_time must be earlier than end_time")
+        return self
 
 
 class ShowResult(BaseModel):
