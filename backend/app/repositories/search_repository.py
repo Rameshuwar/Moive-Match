@@ -29,6 +29,9 @@ def find_shows(
     statement = (
         select(
             Movie.title,
+            Movie.poster_url,
+            Movie.language,
+            Movie.duration_minutes,
             Theatre.name,
             Show.show_time,
             ShowPrice.ticket_price,

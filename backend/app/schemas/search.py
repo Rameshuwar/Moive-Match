@@ -10,27 +10,24 @@ class SearchRequest(BaseModel):
         description="District or area where the user wants to watch a movie",
         examples=["Salem"],
     )
-
     date: DateType = Field(
         description="Date of the movie show",
         examples=["2026-10-03"],
     )
-
     start_time: TimeType = Field(
         description="Start of the preferred time range",
         examples=["14:00"],
     )
-
     end_time: TimeType = Field(
         description="End of the preferred time range",
         examples=["19:00"],
     )
-
     max_price: int = Field(
         gt=0,
         description="Maximum ticket price in INR",
         examples=[100],
     )
+
     @model_validator(mode="after")
     def validate_time_range(self):
         if self.start_time >= self.end_time:
@@ -40,6 +37,9 @@ class SearchRequest(BaseModel):
 
 class ShowResult(BaseModel):
     movie: str
+    poster_url: str | None
+    language: str
+    duration_minutes: int
     theatre: str
     show_time: TimeType
     ticket_price: int
@@ -47,10 +47,7 @@ class ShowResult(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    message: str = Field(
-        description="Human-readable search result summary",
-        examples=["2 movies found"],
-    )
+    message: str = Field(...)
     total_results: int
     results: list[ShowResult]
 

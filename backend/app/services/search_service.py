@@ -20,6 +20,9 @@ def search_shows(
     results = [
         ShowResult(
             movie=row.title,
+            poster_url=row.poster_url,
+            language=row.language,
+            duration_minutes=row.duration_minutes,
             theatre=row.name,
             show_time=row.show_time,
             ticket_price=row.ticket_price,
