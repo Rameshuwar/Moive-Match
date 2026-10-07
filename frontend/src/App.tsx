@@ -1,75 +1,257 @@
 import { useState } from 'react'
 import ShowCard from './components/ShowCard'
+import { searchShows } from './api/movieMatchApi'
+
+type MatchingShow = {
+  movieTitle: string
+  poster: string
+  language: string
+  format: string
+  duration: string
+  theatre: string
+  showTime: string
+  price: number
+  availableSeats: number
+}
 
 function App() {
   const [location, setLocation] = useState('Salem')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
+
+  const [matchingShows, setMatchingShows] = useState<MatchingShow[]>([])
+
+  const [isSearching, setIsSearching] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const [searchError, setSearchError] = useState('')
   const [lastUpdated, setLastUpdated] = useState('just now')
-const matchingShows = [
-  {
-    movieTitle: 'Interstellar',
-    poster:
-      'https://image.tmdb.org/t/p/w500/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg',
-    language: 'English',
-    format: '2D',
-    duration: '2h 49m',
-    theatre: 'INOX Salem',
-    showTime: '2:30 PM',
-    price: 120,
-    availableSeats: 24,
-  },
-  {
-    movieTitle: 'Inception',
-    poster:
-      'https://image.tmdb.org/t/p/w500/oYuLEt3zVCKq57qu2F8dT7NIa6f.jpg',
-    language: 'English',
-    format: '2D',
-    duration: '2h 28m',
-    theatre: 'ARRS Multiplex',
-    showTime: '4:15 PM',
-    price: 150,
-    availableSeats: 11,
-  },
-  {
-    movieTitle: 'The Dark Knight',
-    poster:
-      'https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg',
-    language: 'English',
-    format: 'IMAX',
-    duration: '2h 32m',
-    theatre: 'PVR Cinemas',
-    showTime: '6:30 PM',
-    price: 200,
-    availableSeats: 32,
-  },
-  {
-    movieTitle: 'The Shawshank Redemption',
-    poster:
-      'https://image.tmdb.org/t/p/w500/9cqNxx0GxF0bflZmeSMuL5tnGzr.jpg',
-    language: 'English',
-    format: '2D',
-    duration: '2h 22m',
-    theatre: 'Sona Screens',
-    showTime: '8:45 PM',
-    price: 100,
-    availableSeats: 7,
-  },
-]
-const handleRefreshAvailability = () => {
-  if (isRefreshing) {
-    return
+
+  /*
+   * The backend expects:
+   *
+   * start_time
+   * end_time
+   *
+   * We convert the UI time options into backend time ranges.
+   */
+  const timeRanges: Record<
+    string,
+    {
+      start_time: string
+      end_time: string
+    }
+  > = {
+    Morning: {
+      start_time: '06:00',
+      end_time: '12:00',
+    },
+    Afternoon: {
+      start_time: '12:00',
+      end_time: '17:00',
+    },
+    Evening: {
+      start_time: '17:00',
+      end_time: '21:00',
+    },
+    Night: {
+      start_time: '21:00',
+      end_time: '23:59',
+    },
   }
 
-  setIsRefreshing(true)
+  /*
+   * Convert backend search results into the structure
+   * expected by ShowCard.
+   */
+  const convertResultsToShows = (
+    results: {
+      movie: string
+      poster_url: string | null
+      language: string
+      duration_minutes: number
+      theatre: string
+      show_time: string
+      ticket_price: number
+      available_seats: number
+    }[],
+  ): MatchingShow[] => {
+    return results.map((show) => ({
+      movieTitle: show.movie,
+      poster: show.poster_url ?? '',
+      language: show.language,
+      format: '2D',
+      duration: formatDuration(show.duration_minutes),
+      theatre: show.theatre,
+      showTime: formatShowTime(show.show_time),
+      price: show.ticket_price,
+      availableSeats: show.available_seats,
+    }))
+  }
+  /*
+   * Convert movie duration in minutes into a readable format.
+   *
+   * Examples:
+   * 169 -> 2h 49m
+   * 120 -> 2h
+   * 45  -> 45m
+   */
+  const formatDuration = (minutes: number): string => {
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
 
-  setTimeout(() => {
-    setLastUpdated('just now')
-    setIsRefreshing(false)
-  }, 900)
-}
+    if (hours === 0) {
+      return `${remainingMinutes}m`
+    }
+
+    if (remainingMinutes === 0) {
+      return `${hours}h`
+    }
+
+    return `${hours}h ${remainingMinutes}m`
+  }
+  /*
+   * Convert backend time such as:
+   *
+   * 15:00:00
+   *
+   * into:
+   *
+   * 3:00 PM
+   */
+  const formatShowTime = (showTime: string): string => {
+    const [hoursString, minutesString] = showTime.split(':')
+
+    const hours = Number(hoursString)
+    const minutes = Number(minutesString)
+
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+      return showTime
+    }
+
+    const period = hours >= 12 ? 'PM' : 'AM'
+    const displayHours = hours % 12 || 12
+    const displayMinutes = String(minutes).padStart(2, '0')
+
+    return `${displayHours}:${displayMinutes} ${period}`
+  }
+
+  /*
+   * Perform the actual MovieMatch search.
+   */
+  const performSearch = async () => {
+    if (isSearching || isRefreshing) {
+      return
+    }
+
+    setSearchError('')
+
+    /*
+     * Validate date.
+     */
+    if (!date) {
+      setSearchError('Please select a date.')
+      return
+    }
+
+    /*
+     * Validate time.
+     */
+    if (!time) {
+      setSearchError('Please select a time.')
+      return
+    }
+
+    /*
+     * Validate maximum price.
+     */
+    if (!maxPrice) {
+      setSearchError('Please select a maximum ticket price.')
+      return
+    }
+
+    const selectedTimeRange = timeRanges[time]
+
+    if (!selectedTimeRange) {
+      setSearchError('Please select a valid time range.')
+      return
+    }
+
+    setIsSearching(true)
+
+    try {
+      const response = await searchShows({
+        location,
+        date,
+        start_time: selectedTimeRange.start_time,
+        end_time: selectedTimeRange.end_time,
+        max_price: Number(maxPrice),
+      })
+
+      const shows = convertResultsToShows(response.results)
+
+      setMatchingShows(shows)
+      setLastUpdated('just now')
+    } catch (error) {
+      console.error('MovieMatch search failed:', error)
+
+      setMatchingShows([])
+
+      setSearchError(
+        'Unable to find shows right now. Please make sure the backend is running.',
+      )
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  /*
+   * Refresh live availability using the same search
+   * criteria currently selected by the user.
+   */
+  const handleRefreshAvailability = async () => {
+    if (isRefreshing || isSearching) {
+      return
+    }
+
+    if (!date || !time || !maxPrice) {
+      return
+    }
+
+    const selectedTimeRange = timeRanges[time]
+
+    if (!selectedTimeRange) {
+      return
+    }
+
+    setIsRefreshing(true)
+    setSearchError('')
+
+    try {
+      const response = await searchShows({
+        location,
+        date,
+        start_time: selectedTimeRange.start_time,
+        end_time: selectedTimeRange.end_time,
+        max_price: Number(maxPrice),
+      })
+
+      const shows = convertResultsToShows(response.results)
+
+      setMatchingShows(shows)
+      setLastUpdated('just now')
+    } catch (error) {
+      console.error('MovieMatch refresh failed:', error)
+
+      setSearchError(
+        'Unable to refresh availability. Please try again.',
+      )
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   return (
     <div className="app">
 
@@ -89,10 +271,10 @@ const handleRefreshAvailability = () => {
 
           <div className="nav-actions">
 
-
             <button className="login-button">
               Login
             </button>
+
           </div>
 
         </div>
@@ -133,19 +315,40 @@ const handleRefreshAvailability = () => {
               </label>
 
               <div className="input-wrapper">
-                <span className="input-icon">📍</span>
+                <span className="input-icon">
+                  📍
+                </span>
 
                 <select
                   id="location"
                   value={location}
-                  onChange={(event) => setLocation(event.target.value)}
+                  onChange={(event) =>
+                    setLocation(event.target.value)
+                  }
                 >
-                  <option value="Salem">Salem</option>
-                  <option value="Chennai">Chennai</option>
-                  <option value="Coimbatore">Coimbatore</option>
-                  <option value="Madurai">Madurai</option>
-                  <option value="Tiruchirappalli">Tiruchirappalli</option>
-                  <option value="Thoothukudi">Thoothukudi</option>
+                  <option value="Salem">
+                    Salem
+                  </option>
+
+                  <option value="Chennai">
+                    Chennai
+                  </option>
+
+                  <option value="Coimbatore">
+                    Coimbatore
+                  </option>
+
+                  <option value="Madurai">
+                    Madurai
+                  </option>
+
+                  <option value="Tiruchirappalli">
+                    Tiruchirappalli
+                  </option>
+
+                  <option value="Thoothukudi">
+                    Thoothukudi
+                  </option>
                 </select>
               </div>
             </div>
@@ -157,13 +360,17 @@ const handleRefreshAvailability = () => {
               </label>
 
               <div className="input-wrapper">
-                <span className="input-icon">📅</span>
+                <span className="input-icon">
+                  📅
+                </span>
 
                 <input
                   id="date"
                   type="date"
                   value={date}
-                  onChange={(event) => setDate(event.target.value)}
+                  onChange={(event) =>
+                    setDate(event.target.value)
+                  }
                 />
               </div>
             </div>
@@ -176,20 +383,27 @@ const handleRefreshAvailability = () => {
 
               <div className="time-options">
 
-                {['Morning', 'Afternoon', 'Evening', 'Night'].map(
-                  (timeOption) => (
-                    <button
-                      key={timeOption}
-                      type="button"
-                      className={`time-button ${
-                        time === timeOption ? 'selected' : ''
-                      }`}
-                      onClick={() => setTime(timeOption)}
-                    >
-                      {timeOption}
-                    </button>
-                  )
-                )}
+                {[
+                  'Morning',
+                  'Afternoon',
+                  'Evening',
+                  'Night',
+                ].map((timeOption) => (
+                  <button
+                    key={timeOption}
+                    type="button"
+                    className={`time-button ${
+                      time === timeOption
+                        ? 'selected'
+                        : ''
+                    }`}
+                    onClick={() =>
+                      setTime(timeOption)
+                    }
+                  >
+                    {timeOption}
+                  </button>
+                ))}
 
               </div>
             </div>
@@ -202,14 +416,23 @@ const handleRefreshAvailability = () => {
 
               <div className="price-options">
 
-                {['100', '150', '200', '300'].map((price) => (
+                {[
+                  '100',
+                  '150',
+                  '200',
+                  '300',
+                ].map((price) => (
                   <button
                     key={price}
                     type="button"
                     className={`price-button ${
-                      maxPrice === price ? 'selected' : ''
+                      maxPrice === price
+                        ? 'selected'
+                        : ''
                     }`}
-                    onClick={() => setMaxPrice(price)}
+                    onClick={() =>
+                      setMaxPrice(price)
+                    }
                   >
                     ₹{price}
                   </button>
@@ -220,72 +443,120 @@ const handleRefreshAvailability = () => {
 
             {/* Search Button */}
             <div className="search-action">
+
               <button
                 type="button"
                 className="find-shows-button"
-                onClick={() => {
-                  console.log({
-                    location,
-                    date,
-                    time,
-                    maxPrice,
-                  })
-                }}
+                onClick={performSearch}
+                disabled={isSearching}
               >
-                🔍 Find Matching Shows
+                {isSearching
+                  ? 'Finding Shows...'
+                  : '🔍 Find Matching Shows'}
               </button>
+
             </div>
 
           </div>
 
+          {/* Search Error */}
+          {searchError && (
+            <p className="search-error">
+              {searchError}
+            </p>
+          )}
+
         </section>
 
-<section className="shows-section">
+        {/* Matching Shows */}
+        <section className="shows-section">
 
-  {/* Header: title on left, count on right */}
-  <div className="shows-section-header">
-    <div>
-      <span className="section-label">YOUR MATCHES</span>
-      <h2>Matching Shows</h2>
-      <p>Shows that fit your movie plan.</p>
-    </div>
+          {/* Header */}
+          <div className="shows-section-header">
 
-    <span className="result-count">{matchingShows.length} shows</span>
-  </div>
+            <div>
 
-  {/* Availability bar now sits BELOW the header */}
-  <div className="availability-bar">
-    <div className="availability-info">
-      <span className="availability-dot" />
-      <div>
-        <strong>Live availability</strong>
-        <span>Updated {lastUpdated}</span>
-      </div>
-    </div>
-    <button
-      type="button"
-      className={`refresh-button ${isRefreshing ? 'refreshing' : ''}`}
-      onClick={handleRefreshAvailability}
-      disabled={isRefreshing}
-    >
-      <span className="refresh-icon">↻</span>
-      {isRefreshing ? 'Refreshing...' : 'Refresh'}
-    </button>
-  </div>
+              <span className="section-label">
+                YOUR MATCHES
+              </span>
 
-  <div className="show-grid">
+              <h2>
+                Matching Shows
+              </h2>
 
+              <p>
+                Shows that fit your movie plan.
+              </p>
 
-    {matchingShows.map((show) => (
-      <ShowCard
-        key={`${show.movieTitle}-${show.theatre}-${show.showTime}`}
-        {...show}
-      />
-    ))}
+            </div>
 
-  </div>
+            <span className="result-count">
+              {matchingShows.length} shows
+            </span>
 
-</section>
+          </div>
+
+          {/* Availability Bar */}
+          <div className="availability-bar">
+
+            <div className="availability-info">
+
+              <span className="availability-dot" />
+
+              <div>
+
+                <strong>
+                  Live availability
+                </strong>
+
+                <span>
+                  Updated {lastUpdated}
+                </span>
+
+              </div>
+
+            </div>
+
+            <button
+              type="button"
+              className={`refresh-button ${
+                isRefreshing
+                  ? 'refreshing'
+                  : ''
+              }`}
+              onClick={handleRefreshAvailability}
+              disabled={
+                isRefreshing ||
+                isSearching ||
+                matchingShows.length === 0
+              }
+            >
+
+              <span className="refresh-icon">
+                ↻
+              </span>
+
+              {isRefreshing
+                ? 'Refreshing...'
+                : 'Refresh'}
+
+            </button>
+
+          </div>
+
+          {/* Show Cards */}
+          <div className="show-grid">
+
+            {matchingShows.map((show) => (
+              <ShowCard
+                key={`${show.movieTitle}-${show.theatre}-${show.showTime}`}
+                {...show}
+              />
+            ))}
+
+          </div>
+
+        </section>
 
       </main>
 
