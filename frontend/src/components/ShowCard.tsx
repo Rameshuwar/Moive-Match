@@ -10,6 +10,8 @@ interface ShowCardProps {
   showTime: string
   price: number
   availableSeats: number
+  isSaved: boolean
+  onToggleSave: () => void
 }
 
 function ShowCard({
@@ -22,6 +24,8 @@ function ShowCard({
   showTime,
   price,
   availableSeats,
+  isSaved,
+  onToggleSave,
 }: ShowCardProps) {
   return (
     <article className="show-card">
@@ -38,10 +42,18 @@ function ShowCard({
 
           <button
             type="button"
-            className="save-show-button"
-            aria-label={`Save ${movieTitle}`}
+            className={`save-show-button ${
+              isSaved ? 'saved' : ''
+            }`}
+            aria-label={
+              isSaved
+                ? `Remove ${movieTitle} from saved shows`
+                : `Save ${movieTitle}`
+            }
+            aria-pressed={isSaved}
+            onClick={onToggleSave}
           >
-            ♡
+            {isSaved ? '♥' : '♡'}
           </button>
         </div>
 
@@ -79,6 +91,7 @@ function ShowCard({
             }`}
           >
             <span className="status-dot" />
+
             <span>
               {availableSeats} seats available
             </span>
