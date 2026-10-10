@@ -604,31 +604,46 @@ const handleRefreshAvailability = async () => {
             </button>
           </div>
 
-          {/* Show Cards */}
-          <div className="show-grid">
-            {matchingShows.map((show) => (
-              <ShowCard
-                key={`${show.movieTitle}-${show.theatre}-${show.showTime}`}
-                movieTitle={show.movieTitle}
-                poster={show.poster}
-                language={show.language}
-                format={show.format}
-                duration={show.duration}
-                theatre={show.theatre}
-                showTime={show.showTime}
-                price={show.price}
-                availableSeats={
-                  show.availableSeats
-                }
-                isSaved={isShowSaved(
-                  show.original,
-                )}
-                onToggleSave={() =>
-                  handleToggleSave(show)
-                }
-              />
-            ))}
-          </div>
+{/* Show Cards */}
+{matchingShows.length > 0 ? (
+  <div className="show-grid">
+    {matchingShows.map((show) => (
+      <ShowCard
+        key={`${show.movieTitle}-${show.theatre}-${show.showTime}`}
+        movieTitle={show.movieTitle}
+        poster={show.poster}
+        language={show.language}
+        format={show.format}
+        duration={show.duration}
+        theatre={show.theatre}
+        showTime={show.showTime}
+        price={show.price}
+        availableSeats={show.availableSeats}
+        isSaved={isShowSaved(show.original)}
+        onToggleSave={() => handleToggleSave(show)}
+      />
+    ))}
+  </div>
+) : (
+  <div className="empty-state no-results-state">
+    <div className="empty-state-icon" aria-hidden="true">
+      🎬
+    </div>
+
+    <h3>
+      {searchError
+        ? 'We couldn’t find your shows'
+        : 'No matching shows found'}
+    </h3>
+
+    <p>
+      {searchError
+        ? 'Please check your connection and try searching again.'
+        : 'No shows match your current movie plan. Try changing your date, time, location, or maximum ticket price.'}
+    </p>
+  </div>
+)}
+
         </section>
 
         {/* Saved Shows */}
